@@ -42,4 +42,7 @@ public class Func {
 	public String            getBody()       {return body;}
 	public ArrayList<String> getParameters() {return parameters;}
 
+	// setters
+	public void setName(String name) {this.name = name;}
+
 } //class

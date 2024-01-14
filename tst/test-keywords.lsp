@@ -37,8 +37,6 @@
 
 ; TEST KEYWORD read & print
 
-	;( print ( read ) )
-
 ; TEST KEYWORD =
 
 	( assert ( = 1 1 ) )

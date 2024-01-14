@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.Scanner;
 import java.util.function.Consumer;
 
@@ -21,13 +23,15 @@ public class Interpreter {
 		NULL = 0,
 		NUMBER = 1,
 		BOOLEAN = 2,
-		LIST = 3;
+		LIST = 3,
+		FUNC = 4;
 
 	private static int
 
 		depth = 1,
 		lvlOnePar = 0,
-		parentheses = 0;
+		parentheses = 0,
+		assertNumber = 0;
 
 	private static boolean
 
@@ -42,6 +46,7 @@ public class Interpreter {
 
 	private static ArrayList<Func> functionSymbolTable = new ArrayList<>();
 	private static ArrayList<Var>  variableSymbolTable = new ArrayList<>();
+	private static Queue<String> tokenQueue = new LinkedList<>();
 
 /*******************************************************************************
 
@@ -287,6 +292,7 @@ public class Interpreter {
 			case "tree"     :return tree         (scnr);
 			case "memory"   :return memory       (scnr);
 			case "reset"    :return reset        (scnr);
+			case "lambda"   :return lambda       (scnr);
 
 			case "exit": System.exit(0);
 
@@ -360,30 +366,7 @@ public class Interpreter {
 		// This method advances the scanner to the next token.
 		// It also collects statistics and enables comments.
 
-		String token = scnr.next();
-
-		 // This allows for the use of inline comments.
-
-		while (token.startsWith(";")) {
-
-			scnr.nextLine();
-			token = scnr.next();
-
-		} // while
-
-		 // This allows for the use of prologue comments.
-
-		// It also gives us a nice little 'do nothing' keyword: #|#
-
-		if (token.startsWith("#|")) {
-
-			while (!token.endsWith("|#"))
-
-				token = scnr.next();
-
-			token = scnr.next();
-
-		} // if
+		String token = tokenize(scnr);
 
 		// Now we collect some statistics.
 
@@ -428,6 +411,45 @@ public class Interpreter {
 		} // if
 
 		return token;
+
+	} // method
+
+	public static String tokenize(Scanner scnr) {
+
+		if (tokenQueue.isEmpty()) {
+
+			String chunk = scnr.next();
+
+			 // This allows for the use of inline comments.
+
+			while (chunk.startsWith(";")) {
+
+				scnr.nextLine();
+				chunk = scnr.next();
+
+			} // while
+
+			 // This allows for the use of prologue comments.
+
+			// It also gives us a 'do nothing' keyword: #|#
+
+			if (chunk.startsWith("#|")) {
+
+				while (!chunk.endsWith("|#"))
+
+					chunk = scnr.next();
+
+				chunk = scnr.next();
+
+			} // if
+
+			for (String token : chunk.split("(?<=[()])|(?=[()])"))
+
+					tokenQueue.add(token);
+
+		} // if
+
+		return tokenQueue.poll();
 
 	} // method
 
@@ -1138,72 +1160,180 @@ public class Interpreter {
 
 	} // method
 
-	private static Node define(Scanner scnr) throws LispError {
+/*******************************************************************************
 
+			     MY EDITS A YEAR LATER
 
-		String identifier = adv(scnr);
+*******************************************************************************/
 
-		if (!isAlphabeticOnly(identifier))
+	private static Node myAssert(Scanner scnr) throws LispError {
 
-			throw new LispError("define",
+		Node condition = eval(scnr);
 
-				"Invalide name: alphabetic characters only.");
+		if (condition.getType() != BOOLEAN)
 
-		String str = "";
+			throw new LispError("cond", "boolean", condition);
 
-		int initial = parentheses;
+		assertNumber++;
 
-		do {
-			str += adv(scnr) + " ";
+		if (!condition.getBoolean())
 
-		} while (parentheses > initial || str.equals("' "));
+			throw new LispError(
+			"Assertion #" + assertNumber + " failed.");
+
+		return new Node(true, scnr);
+
+	} // method
+
+	private static void recover(Scanner scnr) throws LispError {
+
+		// This methods tries to recover from an error.
+
+		depth = 1;
+
+		parentheses = -100; // left-justify tokens in developer's mode
+
+		// read over remaining part of current expression
+
+		while (lvlOnePar > 0) adv(scnr);
+
+		parentheses = 0;
+
+	} // method
+
+	private static Node tree(Scanner scnr) throws LispError {
+
+		Node arg = eval(scnr); adv(scnr);
+
+		if (repl) System.out.println();
+
+		System.out.println(toTree(arg));
+
+		return arg;
+
+	} // method
+
+	private static Node memory(Scanner scnr) throws LispError {
+
+		if (repl) System.out.println();
+
+		for (Func function : functionSymbolTable)
+			System.out.println(function.getName());
+
+		for (Var variable : variableSymbolTable)
+			System.out.println(variable.getIdentifier());
+
+		adv(scnr); return new Node();
+
+	} // method
+
+	private static Node reset(Scanner scnr) throws LispError {
 
 		adv(scnr);
 
-		if (!str.contains("lambda")) {
+		functionSymbolTable.clear();
+		variableSymbolTable.clear();
 
-			Node value = eval(new Scanner(str));
+		parentheses = 0;
+		depth = 1;
+		lvlOnePar = 0;
 
-			variableSymbolTable.add(new Var(identifier, value));
+		return new Node();
 
-			return value;
+	} // method
 
-		} // if
+	private static String accentuate(String str) { // for the REPL
 
-		Scanner subScnr = new Scanner(str);
+		str = "\n\t" + ansi.brightBlueFG(str);
 
-		subScnr.next(); // (
-		subScnr.next(); // lambda
-		subScnr.next(); // (
+		if (developerMode)
+			str += ansi.yellowFG(" Parentheses: " + parentheses);
 
-			// Could be better.
-			// Lambda should have its own treatment.
+		return str + "\n";
+
+	} // method
+
+	private static void repl() {
+
+		System.out.println("Welcome to Zach's Lisp Interpreter.\n");
+
+		String prompt = ansi.brightGreenFG("zli> ");
+
+		//   zli  -->   Zach's Lisp Interpreter
+
+		while(true) {
+
+			System.out.print(prompt);
+
+			Scanner cmd = new Scanner(keyboard.nextLine());
+
+			try {
+
+				System.out.println(
+
+					accentuate(toSexpr(eval(cmd))));
+
+			} catch(LispError e) {
+
+				System.out.println(e.getMessage());
+
+			} // try-catch
+
+		}  // while
+
+	} // method
+
+	private static Node lambda(Scanner scnr) throws LispError {
+
+		/*
+			----------------------------------
+			( lambda ( parameters ) ( body ) )
+			^        ^            ^ ^      ^ ^
+			0        1            2 3      4 5
+			----------------------------------
+		*/
+
+		if (!adv(scnr).equals("(")) // consumes #1
+
+			throw new LispError("lambda",
+			"Expected opening parenthesis " +
+			"for parameter declaration.");
 
 		ArrayList<String> parameters = new ArrayList<String>();
 
-		do {
-			String parameter = subScnr.next();
+		String parameter = adv(scnr);
 
-			if (parameter.equals(")")) break;
+		while (!parameter.equals(")")) { // consumes #2
 
-			if (!isAlphabeticOnly(parameter)) {
+			if (!isAlphabeticOnly(parameter))
 
-				subScnr.close();
-
-				throw new LispError("define",
-				"Invalide name: alphabetic characters only.");
-			}
+				throw new LispError("lambda",
+				"Invalid parameter name: " + parameter + ".");
 
 			parameters.add(parameter);
 
-		} while(true);
+			parameter = adv(scnr);
 
-		String body = "";
+		} // while
+
+		String body = adv(scnr); // consumes #3
 
 		int count = 0;
 
+		if (body.equals("(")) {
+
+			count ++;
+
+		} else {
+
+			throw new LispError("lambda",
+			"Expected opening parenthesis " +
+			"for body declaration.");
+
+		} // if
+
 		do {
-			String token = subScnr.next();
+			String token = adv(scnr);
 
 			if (token.equals("(")) count++;
 
@@ -1211,133 +1341,49 @@ public class Interpreter {
 
 			body += token + " ";
 
-		} while (count > 0);
+		} while (count > 0); // consumes #4
 
-		functionSymbolTable.add(new Func(identifier, parameters, body));
+		String end = adv(scnr);
 
-		subScnr.close();
+		if (!end.equals(")")) // consumes #5
 
-		return new Node();
+			throw new LispError("lambda",
+			"Expected closing parenthesis but got " + end + ".");
+
+		return new Node(new Func(null, parameters, body));
 
 	} // method
 
-/*******************************************************************************
+	private static Node define(Scanner scnr) throws LispError {
 
-			     MY EDITS A YEAR LATER
+		String name = adv(scnr);
 
-*******************************************************************************/
+		if (!isAlphabeticOnly(name))
 
-private static Node myAssert(Scanner scnr) throws LispError {
+			throw new LispError("define",
 
-	Node condition = eval(scnr);
+				"Invalide name: " + name + ".");
 
-	if (condition.getType() != BOOLEAN)
+		Node value = eval(scnr);
 
-		throw new LispError("cond", "boolean", condition);
+		if (value.getType() == FUNC) {
 
-	if (!condition.getBoolean())
+			Func f = value.getFunc();
+			f.setName(name);
+			functionSymbolTable.add(f);
 
-		throw new LispError("Assertion failed.");
+		} else {
 
-	return new Node(true, scnr);
+			variableSymbolTable.add(new Var(name, value));
 
-} // method
+		} // if
 
-private static void recover(Scanner scnr) throws LispError {
+		adv(scnr); // consumes closing parenthesis
 
-	// This methods tries to recover from an error.
+		return new Node(); // ?
 
-	depth = 1;
+	} // method
 
-	parentheses = -100; // left-justify tokens in developer's mode
-
-	// read over remaining part of current expression
-
-	while (lvlOnePar > 0) adv(scnr);
-
-	parentheses = 0;
-
-} // method
-
-private static Node tree(Scanner scnr) throws LispError {
-
-	Node arg = eval(scnr); adv(scnr);
-
-	if (repl) System.out.println();
-
-	System.out.println(toTree(arg));
-
-	return arg;
-
-} // method
-
-private static Node memory(Scanner scnr) throws LispError {
-
-	if (repl) System.out.println();
-
-	for (Func function : functionSymbolTable)
-		System.out.println(function.getName());
-
-	for (Var variable : variableSymbolTable)
-		System.out.println(variable.getIdentifier());
-
-	adv(scnr); return new Node();
-
-} // method
-
-private static Node reset(Scanner scnr) throws LispError {
-
-	adv(scnr);
-
-	functionSymbolTable.clear();
-	variableSymbolTable.clear();
-
-	parentheses = 0;
-	depth = 1;
-	lvlOnePar = 0;
-
-	return new Node();
-
-} // method
-
-private static String accentuate(String str) { // for the REPL
-
-	str = "\n\t" + ansi.brightBlueFG(str);
-
-	if (developerMode)
-		str += ansi.yellowFG(" Parentheses: " + parentheses);
-
-	return str + "\n";
-
-} // method
-
-private static void repl() {
-
-	System.out.println("Welcome to Zach's Lisp Interpreter.\n");
-
-	String prompt = ansi.brightGreenFG("zli> ");
-
-	//   zli  -->   Zach's Lisp Interpreter
-
-	while(true) {
-
-		System.out.print(prompt);
-
-		Scanner cmd = new Scanner(keyboard.nextLine());
-
-		try {
-
-			System.out.println(accentuate(toSexpr(eval(cmd))));
-
-		} catch(LispError e) {
-
-			System.out.println(e.getMessage());
-
-		} // try-catch
-
-	}  // while
-
-} // method
 
 /*******************************************************************************
 

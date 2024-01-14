@@ -14,12 +14,14 @@ public class Node {
 		NULL = 0,
 		NUMBER = 1,
 		BOOLEAN = 2,
-		LIST = 3;
+		LIST = 3,
+		FUNC = 4;
 
-	private  int         type;
-	private  BigInteger  number;
-	private  boolean     bool;
-	private  Node        car, cdr;
+	private int        type;
+	private BigInteger number;
+	private boolean    bool;
+	private Node       car, cdr;
+	private Func       func;
 
 	public Node() {
 
@@ -81,6 +83,13 @@ public class Node {
 
 	} // constructor
 
+	public Node(Func func) {
+
+		type = FUNC;
+		this.func = func;
+
+	} // constructor
+
 	// getters
 
 	public  int         getType()     {return  type;}
@@ -88,6 +97,7 @@ public class Node {
 	public  boolean     getBoolean()  {return  bool;}
 	public  Node        getCar()      {return  car;}
 	public  Node        getCdr()      {return  cdr;}
+	public  Func        getFunc()     {return func;}
 
 	public String getTypeString() {
 
