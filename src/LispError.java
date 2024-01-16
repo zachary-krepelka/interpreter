@@ -18,7 +18,11 @@ public class LispError extends Exception {
 
 	public LispError(String message) { // one parameter
 
-		super(Interpreter.ansi.brightRedFG(
+		super(Interpreter.ansi.colorize(
+
+			ANSI.FOREGROUND,
+			ANSI.BRIGHT,
+			ANSI.RED,
 
 			heading + message + "\n"
 
@@ -28,13 +32,17 @@ public class LispError extends Exception {
 
 	public LispError(String operator, String message) { // two parameters
 
-		super(Interpreter.ansi.brightRedFG(
+		super(Interpreter.ansi.colorize(
+
+			ANSI.FOREGROUND,
+			ANSI.BRIGHT,
+			ANSI.RED,
 
 			heading + context(operator) + message + "\n"
 
 		));
 
-	} // constructor
+	} // constructor (overloaded)
 
 	public LispError( // three parameters
 
@@ -42,7 +50,11 @@ public class LispError extends Exception {
 			String expected,
 			Node received
 	) {
-		super(Interpreter.ansi.brightRedFG(
+		super(Interpreter.ansi.colorize(
+
+			ANSI.FOREGROUND,
+			ANSI.BRIGHT,
+			ANSI.RED,
 
 			heading                  +
 			context(operator)        +

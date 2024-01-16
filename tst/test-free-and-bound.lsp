@@ -6,6 +6,8 @@
 
 ( define free 3 )
 
+( print 0 )
+
 ( define f ( lambda ( bound ) ( + bound free ) ) )
 
 ( assert ( equal? ( f 1 ) 4 ) )

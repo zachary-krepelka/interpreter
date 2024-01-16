@@ -20,11 +20,16 @@ public class Interpreter {
 
 	private final static int
 
-		NULL = 0,
-		NUMBER = 1,
+		NULL    = 0,
+		NUMBER  = 1,
 		BOOLEAN = 2,
-		LIST = 3,
-		FUNC = 4;
+		LIST    = 3,
+		FUNC    = 4;
+
+	private final static boolean
+
+		OPEN  = true,
+		CLOSE = false;
 
 	private static int
 
@@ -41,7 +46,7 @@ public class Interpreter {
 
 	private static String expr, tree, tabs;
 
-	public static ANSI ansi = new ANSI(false);
+	public static ANSI ansi = new ANSI();
 	private static Scanner keyboard = new Scanner(System.in);
 
 	private static ArrayList<Func> functionSymbolTable = new ArrayList<>();
@@ -248,14 +253,14 @@ public class Interpreter {
 
 		switch (token) {
 
-			case "car"      :return car          (scnr); // Part 2
-			case "cdr"      :return cdr          (scnr);
-			case "null?"    :return isNull       (scnr);
-			case "atom?"    :return isAtom       (scnr);
-			case "read"     :return read         (scnr);
-			case "print"    :return print        (scnr);
-			case "="        :return equal        (scnr, false);
-			case "equal?"   :return equal        (scnr,  true);
+			case "car"      :return car          (scnr, token); // Part 2
+			case "cdr"      :return cdr          (scnr, token);
+			case "null?"    :return isNull       (scnr, token);
+			case "atom?"    :return isAtom       (scnr, token);
+			case "read"     :return read         (scnr, token);
+			case "print"    :return print        (scnr, token);
+			case "="        :return equal        (scnr, token, false);
+			case "equal?"   :return equal        (scnr, token, true);
 			case "list-ref" :return listRef      (scnr); // Part 3
 			case "length"   :return length       (scnr);
 			case "cons"     :return cons         (scnr);
@@ -459,52 +464,49 @@ public class Interpreter {
 
 *******************************************************************************/
 
-	private static Node car(Scanner scnr) throws LispError {
+	private static Node car(Scanner scnr, String token)
+	throws LispError {
 
-		Node arg = eval(scnr);
+		Node arg = eval(scnr).assertType(LIST, token);
 
-		if (arg.getType() != LIST)
-
-			throw new LispError("car", "list", arg);
-
-		adv(scnr);
+		consumeParenthesis(CLOSE, scnr, token);
 
 		return arg.getCar();
 
 	} // method
 
-	private static Node cdr(Scanner scnr) throws LispError {
+	private static Node cdr(Scanner scnr, String token)
+	throws LispError {
 
-		Node arg = eval(scnr);
+		Node arg = eval(scnr).assertType(LIST, token);
 
-		if (arg.getType() != LIST)
-
-			throw new LispError("cdr", "list", arg);
-
-		adv(scnr);
+		consumeParenthesis(CLOSE, scnr, token);
 
 		return arg.getCdr();
 
 	} // method
 
-	private static Node isNull(Scanner scnr) throws LispError {
+	private static Node isNull(Scanner scnr, String token)
+	throws LispError {
 
-		return new Node(eval(scnr).getType() == NULL, scnr);
+		return new Node(eval(scnr).getType() == NULL, scnr, token);
 
 	} // method
 
-	private static Node isAtom(Scanner scnr) throws LispError {
+	private static Node isAtom(Scanner scnr, String token)
+	throws LispError {
 
-		int type = eval(scnr).getType();
+		int t = eval(scnr).getType();
 
-		return new Node(type == BOOLEAN || type == NUMBER, scnr);
+		return new Node(t == BOOLEAN || t == NUMBER, scnr, token);
 
 		// What should I do about NULL,
 		// which is considered both a list and an atom?
 
 	} // method
 
-	private static Node read(Scanner scnr) throws LispError {
+	private static Node read(Scanner scnr, String token)
+	throws LispError {
 
 		if (developerMode)
 			System.out.print(tabs);
@@ -516,15 +518,18 @@ public class Interpreter {
 		// Consume end-of-line
 		keyboard.nextLine();
 
-		adv(scnr);
+		consumeParenthesis(CLOSE, scnr, token);
 
 		return node;
 
 	} // method
 
-	private static Node print(Scanner scnr) throws LispError {
+	private static Node print(Scanner scnr, String token)
+	throws LispError {
 
-		Node arg = eval(scnr); adv(scnr);
+		Node arg = eval(scnr);
+
+		consumeParenthesis(CLOSE, scnr, token);
 
 		if (repl) System.out.println();
 
@@ -536,11 +541,13 @@ public class Interpreter {
 
 	private static Node equal(
 
-		Scanner scnr, boolean recursive
+		Scanner scnr, String token, boolean recursive
 
 	) throws LispError {
 
-		Node arg1 = eval(scnr), arg2 = eval(scnr); adv(scnr);
+		Node arg1 = eval(scnr), arg2 = eval(scnr);
+
+		consumeParenthesis(CLOSE, scnr, token);
 
 		if (!recursive && arg1.getType() == LIST)
 
@@ -667,7 +674,7 @@ public class Interpreter {
 
 	private static Node cons(Scanner scnr) throws LispError {
 
-		return new Node(eval(scnr), eval(scnr), scnr);
+		return new Node(eval(scnr), eval(scnr), scnr, "cons");
 
 	} // method
 
@@ -715,20 +722,24 @@ public class Interpreter {
 		Node arg = eval(scnr);
 
 		return new Node(
-			arg.getType() == LIST ||
-			arg.getType() == NULL, scnr);
+			arg.getType() == LIST || arg.getType() == NULL,
+			scnr, "list?");
 
 	} // method
 
 	private static Node isBoolean(Scanner scnr) throws LispError {
 
-		return new Node(eval(scnr).getType() == BOOLEAN, scnr);
+		return new Node(
+			eval(scnr).getType() == BOOLEAN,
+			scnr, "boolean?");
 
 	} // method
 
 	private static Node isNumber(Scanner scnr) throws LispError {
 
-		return new Node(eval(scnr).getType() == NUMBER, scnr);
+		return new Node(
+			eval(scnr).getType() == NUMBER,
+			scnr, "number?");
 
 	} // method
 
@@ -739,7 +750,9 @@ public class Interpreter {
 		if (arg.getType() != NUMBER)
 			throw new LispError("zero?", "number", arg);
 
-		return new Node(arg.getNumber().equals(BigInteger.ZERO), scnr);
+		return new Node(
+			arg.getNumber().equals(BigInteger.ZERO),
+			scnr, "zero?");
 
 	} // method
 
@@ -750,7 +763,9 @@ public class Interpreter {
 		if (arg.getType() != NUMBER)
 			throw new LispError("even?", "number", arg);
 
-		return new Node(!arg.getNumber().testBit(0), scnr);
+		return new Node(
+			!arg.getNumber().testBit(0),
+			scnr, "even?");
 
 	} // method
 
@@ -761,7 +776,9 @@ public class Interpreter {
 		if (arg.getType() != NUMBER)
 			throw new LispError("odd?", "number", arg);
 
-		return new Node(arg.getNumber().testBit(0), scnr);
+		return new Node(
+			arg.getNumber().testBit(0),
+			scnr, "odd?");
 
 	} // method
 
@@ -775,7 +792,9 @@ public class Interpreter {
 		if (arg2.getType() != BOOLEAN)
 			throw new LispError("and", "boolean", arg2);
 
-		return new Node(arg1.getBoolean() & arg2.getBoolean(), scnr);
+		return new Node(
+			arg1.getBoolean() & arg2.getBoolean(),
+			scnr, "and");
 
 		// no short curcuit
 
@@ -791,7 +810,9 @@ public class Interpreter {
 		if (arg2.getType() != BOOLEAN)
 			throw new LispError("or", "boolean", arg2);
 
-		return new Node(arg1.getBoolean() | arg2.getBoolean(), scnr);
+		return new Node(
+			arg1.getBoolean() | arg2.getBoolean(),
+			scnr, "or");
 
 		// no short curcuit
 
@@ -804,7 +825,9 @@ public class Interpreter {
 		if (arg.getType() != BOOLEAN)
 			throw new LispError("not", "boolean", arg);
 
-		return new Node(!arg.getBoolean(), scnr);
+		return new Node(
+			!arg.getBoolean(),
+			scnr, "not");
 
 	} // method
 
@@ -819,7 +842,8 @@ public class Interpreter {
 			throw new LispError("*", "number", arg2);
 
 		return new Node(
-			arg1.getNumber().multiply(arg2.getNumber()), scnr);
+			arg1.getNumber().multiply(arg2.getNumber()),
+			scnr, "*");
 
 	} // method
 
@@ -833,7 +857,9 @@ public class Interpreter {
 		if (arg2.getType() != NUMBER)
 			throw new LispError("+", "number", arg2);
 
-		return new Node(arg1.getNumber().add(arg2.getNumber()), scnr);
+		return new Node(
+			arg1.getNumber().add(arg2.getNumber()),
+			scnr, "+");
 
 	} // method
 
@@ -848,7 +874,8 @@ public class Interpreter {
 			throw new LispError("-", "number", arg2);
 
 		return new Node(
-			arg1.getNumber().subtract(arg2.getNumber()), scnr);
+			arg1.getNumber().subtract(arg2.getNumber()),
+			scnr, "-");
 
 	} // method
 
@@ -863,8 +890,10 @@ public class Interpreter {
 			throw new LispError("/", "number", arg2);
 
 		// Integer Division
+
 		return new Node(
-			arg1.getNumber().divide(arg2.getNumber()), scnr);
+			arg1.getNumber().divide(arg2.getNumber()),
+			scnr, "/");
 
 	} // method
 
@@ -878,13 +907,15 @@ public class Interpreter {
 		if (arg2.getType() != NUMBER)
 			throw new LispError("%", "number", arg2);
 
-		return new Node(arg1.getNumber().mod(arg2.getNumber()), scnr);
+		return new Node(
+			arg1.getNumber().mod(arg2.getNumber()),
+			scnr, "%");
 
 	} // method
 
 	private static Node exponentiate(Scanner scnr) throws LispError {
 
-		Node arg1 = eval(scnr), arg2 = eval(scnr); adv(scnr);
+		Node arg1 = eval(scnr), arg2 = eval(scnr);
 
 		if (arg1.getType() != NUMBER)
 			throw new LispError("^", "number", arg1);
@@ -893,13 +924,16 @@ public class Interpreter {
 			throw new LispError("^", "number", arg2);
 
 		return new Node(
-			arg1.getNumber().pow(arg2.getNumber().intValue()));
+			arg1.getNumber().pow(arg2.getNumber().intValue()),
+			scnr, "^");
 
 	} // method
 
 	private static Node copy(Scanner scnr) throws LispError {
 
-		Node node = eval(scnr); adv(scnr);
+		Node node = eval(scnr);
+
+		consumeParenthesis(CLOSE, scnr, "copy");
 
 		return copyHelper(node);
 
@@ -1181,7 +1215,7 @@ public class Interpreter {
 			throw new LispError(
 			"Assertion #" + assertNumber + " failed.");
 
-		return new Node(true, scnr);
+		return new Node(true, scnr, "assert");
 
 	} // method
 
@@ -1192,6 +1226,8 @@ public class Interpreter {
 		depth = 1;
 
 		parentheses = -100; // left-justify tokens in developer's mode
+
+		tokenQueue.clear();
 
 		// read over remaining part of current expression
 
@@ -1244,10 +1280,22 @@ public class Interpreter {
 
 	private static String accentuate(String str) { // for the REPL
 
-		str = "\n\t" + ansi.brightBlueFG(str);
+		str = "\n\t" + ansi.colorize(
+
+			ANSI.FOREGROUND,
+			ANSI.BRIGHT,
+			ANSI.BLUE,
+			str);
 
 		if (developerMode)
-			str += ansi.yellowFG(" Parentheses: " + parentheses);
+
+			str += ansi.colorize(
+
+				ANSI.FOREGROUND,
+				ANSI.DULL,
+				ANSI.YELLOW,
+
+				" Parentheses: " + parentheses);
 
 		return str + "\n";
 
@@ -1257,7 +1305,12 @@ public class Interpreter {
 
 		System.out.println("Welcome to Zach's Lisp Interpreter.\n");
 
-		String prompt = ansi.brightGreenFG("zli> ");
+		String prompt = ansi.colorize(
+
+			ANSI.FOREGROUND,
+			ANSI.BRIGHT,
+			ANSI.GREEN,
+			"zli> ");
 
 		//   zli  -->   Zach's Lisp Interpreter
 
@@ -1293,17 +1346,13 @@ public class Interpreter {
 			----------------------------------
 		*/
 
-		if (!adv(scnr).equals("(")) // consumes #1
-
-			throw new LispError("lambda",
-			"Expected opening parenthesis " +
-			"for parameter declaration.");
+		consumeParenthesis(OPEN, scnr, "lambda"); // #1
 
 		ArrayList<String> parameters = new ArrayList<String>();
 
 		String parameter = adv(scnr);
 
-		while (!parameter.equals(")")) { // consumes #2
+		while (!parameter.equals(")")) { // #2
 
 			if (!isAlphabeticOnly(parameter))
 
@@ -1316,21 +1365,9 @@ public class Interpreter {
 
 		} // while
 
-		String body = adv(scnr); // consumes #3
+		String body = consumeParenthesis(OPEN, scnr, "lambda"); // #3
 
-		int count = 0;
-
-		if (body.equals("(")) {
-
-			count ++;
-
-		} else {
-
-			throw new LispError("lambda",
-			"Expected opening parenthesis " +
-			"for body declaration.");
-
-		} // if
+		int count = 1;
 
 		do {
 			String token = adv(scnr);
@@ -1341,14 +1378,9 @@ public class Interpreter {
 
 			body += token + " ";
 
-		} while (count > 0); // consumes #4
+		} while (count > 0); // #4
 
-		String end = adv(scnr);
-
-		if (!end.equals(")")) // consumes #5
-
-			throw new LispError("lambda",
-			"Expected closing parenthesis but got " + end + ".");
+		consumeParenthesis(CLOSE, scnr, "lambda"); // #5
 
 		return new Node(new Func(null, parameters, body));
 
@@ -1366,24 +1398,46 @@ public class Interpreter {
 
 		Node value = eval(scnr);
 
+		consumeParenthesis(CLOSE, scnr, "define");
+
 		if (value.getType() == FUNC) {
 
 			Func f = value.getFunc();
 			f.setName(name);
 			functionSymbolTable.add(f);
 
+			return new Node(); // ?
+
 		} else {
 
 			variableSymbolTable.add(new Var(name, value));
 
+			return value;
+
 		} // if
-
-		adv(scnr); // consumes closing parenthesis
-
-		return new Node(); // ?
 
 	} // method
 
+	public static String consumeParenthesis(
+
+		boolean type,
+		Scanner scnr,
+		String context
+
+	) throws LispError {
+
+		String token = adv(scnr);
+
+		if (!token.equals(type ? "(" : ")"))
+
+			throw new LispError(context,
+
+				"Expected " + ( type ? "open" : "clos" ) +
+				"ing parenthesis but got \"" + token + "\".");
+
+		return token;
+
+	} // method
 
 /*******************************************************************************
 
@@ -1450,9 +1504,11 @@ public class Interpreter {
 			x -> {crashOnError = false;}
 		);
 
+		ansi.disable();
+
 		options.put(
 			"--color",
-			x -> {ansi.turnOnLocally();}
+			x -> {ansi.enable();}
 		);
 
 		ArrayList<String> args = Parser.parse(options, tokens);
@@ -1469,9 +1525,14 @@ public class Interpreter {
 
 			} catch (FileNotFoundException e) {
 
-				System.err.println(
-					ansi.brightGreenFG(
-						"File not found."));
+				System.err.println(ansi.colorize(
+
+					ANSI.FOREGROUND,
+					ANSI.BRIGHT,
+					ANSI.RED,
+
+					"File not found."));
+
 				System.exit(1);
 
 			} // try-catch
