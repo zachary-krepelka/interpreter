@@ -1,30 +1,32 @@
 // FILENAME: ANSI.java
 // AUTHOR: Zachary Krepelka
 // DATE: Saturday, October 9, 2021
-// UPDATED: Monday, January 15th, 2024   11:34 PM
+// UPDATED: Tuesday, January 16th, 2024   12:42 AM
 
 public class ANSI {
 
 	public static final int
 
-		BLACK   = 30,
-		RED     = 31,
-		GREEN   = 32,
-		YELLOW  = 33,
-		BLUE    = 34,
-		MAGENTA = 35,
-		CYAN    = 36,
-		WHITE   = 37;
+	// Colors
 
-	public static final boolean
+		BLACK   = 0,
+		RED     = 1,
+		GREEN   = 2,
+		YELLOW  = 3,
+		BLUE    = 4,
+		MAGENTA = 5,
+		CYAN    = 6,
+		WHITE   = 7,
 
-		// Plane
-		FOREGROUND = true,
-		BACKGROUND = false,
+	// Ground
 
-		// Intensity
-		BRIGHT = true,
-		DULL   = false;
+		FOREGROUND = 0,
+		BACKGROUND = 1,
+
+	// Intensity
+
+		BRIGHT = 1,
+		DULL   = 0;
 
 	private        boolean  localToggle = true;
 	private static boolean globalToggle = true;
@@ -36,23 +38,18 @@ public class ANSI {
 
 	public String colorize(
 
-			boolean plane,     // forground or background
-			boolean intensity, // bright or dull
-			int color,         // one of our constants
-			String str         // the string to colorize
+			int ground,     // forground or background
+			int intensity,  // bright or dull
+			int color,      // one of our eight constants
+			String str      // the string to colorize
 	) {
 
 		if (!localToggle || !globalToggle) return str;
 
-		if (plane == BACKGROUND) color += 10;
-
-		if (intensity == BRIGHT) color += 60;
+		color += 30 + 10 * ground + 60 * intensity;
 
 		return "\033[" + color + "m" + str + "\033[0m";
 
 	} // method
-
-	// NOTE:
-	// https//english.stackexchange.com/a/123245
 
 } // class
